@@ -6,8 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview",
-    "postinstall": "mkdir -p public && cp node_modules/z3-solver/build/z3-built.js public/ && cp node_modules/z3-solver/build/z3-built.wasm public/"
+    "preview": "vite preview"
   },
   "repository": {
     "type": "git",
@@ -29,7 +28,6 @@
   "dependencies": {
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "reactflow": "^11.11.4",
-    "z3-solver": "^4.15.4"
+    "reactflow": "^11.11.4"
   }
 }
