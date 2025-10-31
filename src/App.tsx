@@ -10,7 +10,7 @@ import {
   pastCases,
 } from './data/sampleData';
 import { TreeNode, EvaluationResult } from './types';
-import { evaluateConfiguration } from './utils/evaluation';
+import { evaluateConfigurationWithZ3 } from './utils/evaluation';
 
 function App() {
   const [rootNode, setRootNode] = useState<TreeNode>(initialConfiguration.rootNode);
@@ -33,10 +33,15 @@ function App() {
     setEvaluationResult(null);
   };
 
-  // 評価を実行
-  const handleEvaluate = () => {
-    const result = evaluateConfiguration(rootNode, components, constraints, pastCases);
-    setEvaluationResult(result);
+  // 評価を実行（Z3使用）
+  const handleEvaluate = async () => {
+    try {
+      const result = await evaluateConfigurationWithZ3(rootNode, components, constraints, pastCases);
+      setEvaluationResult(result);
+    } catch (error) {
+      console.error('評価エラー:', error);
+      // エラーの場合は何もしない、または適切なエラー表示を追加
+    }
   };
 
   return (
@@ -44,11 +49,19 @@ function App() {
       {/* 左ペイン: 木構造 */}
       <div className="w-1/2 p-4 overflow-y-auto border-r-2 border-gray-300">
         <div className="mb-4">
-          <h1 className="text-2xl font-bold text-gray-800 mb-2">
-            製品構成デザインツール
-          </h1>
+          <div className="flex items-center gap-3 mb-2">
+            <h1 className="text-2xl font-bold text-gray-800">
+              製品構成デザインツール
+            </h1>
+            <span className="bg-blue-600 text-white text-xs font-semibold px-2 py-1 rounded">
+              Z3 Solver
+            </span>
+          </div>
           <p className="text-sm text-gray-600">
             各選択ポイントで部品を選択し、評価ボタンで制約・価格・リスクを確認できます
+          </p>
+          <p className="text-xs text-gray-500 mt-1">
+            ※ 制約評価にZ3 Solver (WASM) を使用しています
           </p>
         </div>
         <div className="bg-gray-50 p-4 rounded-lg">

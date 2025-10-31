@@ -30,6 +30,15 @@ export enum ConstraintType {
   RECOMMENDED = 'recommended', // 推奨される組み合わせ
 }
 
+// Z3制約式の型
+export type Z3ConstraintExpr = 'and' | 'or' | 'not' | 'implies' | 'xor';
+
+// Z3制約定義
+export interface Z3ConstraintDef {
+  expr: Z3ConstraintExpr;
+  components: string[]; // 部品ID
+}
+
 // 制約の定義
 export interface Constraint {
   id: string;
@@ -38,7 +47,10 @@ export interface Constraint {
   description: string;
   // 制約対象の部品ID配列（2つ以上の部品の組み合わせ）
   componentIds: string[];
+  // Z3制約定義（新規追加）
+  z3Constraint?: Z3ConstraintDef;
   // 制約が満たされているかをチェックする関数（選択された部品IDのセットを受け取る）
+  // Z3制約がある場合はこれは使用されない
   validate: (selectedComponentIds: Set<string>) => boolean;
   severity: 'error' | 'warning' | 'info'; // 制約違反の深刻度
 }

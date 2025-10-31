@@ -89,6 +89,11 @@ export const constraints: Constraint[] = [
     name: 'ハイブリッド×マニュアル非対応',
     description: 'ハイブリッドシステムは5速マニュアルと組み合わせできません',
     componentIds: ['eng-4', 'trans-1'],
+    // Z3制約: NOT (eng-4 AND trans-1) = 両方同時に選択できない
+    z3Constraint: {
+      expr: 'not',
+      components: ['eng-4', 'trans-1'],
+    },
     validate: (selected) => !(selected.has('eng-4') && selected.has('trans-1')),
     severity: 'error',
   },
@@ -98,6 +103,11 @@ export const constraints: Constraint[] = [
     name: '小型エンジン×大型タイヤ非推奨',
     description: '1.5Lエンジンに18インチタイヤは推奨されません（加速性能低下）',
     componentIds: ['eng-1', 'tire-3'],
+    // Z3制約: NOT (eng-1 AND tire-3)
+    z3Constraint: {
+      expr: 'not',
+      components: ['eng-1', 'tire-3'],
+    },
     validate: (selected) => !(selected.has('eng-1') && selected.has('tire-3')),
     severity: 'warning',
   },
@@ -107,6 +117,7 @@ export const constraints: Constraint[] = [
     name: 'スポーツタイヤ×高性能ブレーキ推奨',
     description: 'スポーツタイヤには高性能ブレーキとの組み合わせを推奨',
     componentIds: ['tire-2', 'brake-2'],
+    // この制約は複雑なのでvalidate関数を使用（Z3制約なし）
     validate: (selected) => {
       if (selected.has('tire-2') || selected.has('tire-3')) {
         return selected.has('brake-2') || selected.has('brake-3');
@@ -121,6 +132,11 @@ export const constraints: Constraint[] = [
     name: 'カーボンブレーキ×標準タイヤ非推奨',
     description: 'カーボンセラミックブレーキに標準タイヤは不適切',
     componentIds: ['brake-3', 'tire-1'],
+    // Z3制約: NOT (brake-3 AND tire-1)
+    z3Constraint: {
+      expr: 'not',
+      components: ['brake-3', 'tire-1'],
+    },
     validate: (selected) => !(selected.has('brake-3') && selected.has('tire-1')),
     severity: 'warning',
   },
@@ -130,6 +146,11 @@ export const constraints: Constraint[] = [
     name: 'ディーゼル×CVT非対応',
     description: 'ディーゼルエンジンとCVTは技術的に組み合わせできません',
     componentIds: ['eng-3', 'trans-3'],
+    // Z3制約: NOT (eng-3 AND trans-3)
+    z3Constraint: {
+      expr: 'not',
+      components: ['eng-3', 'trans-3'],
+    },
     validate: (selected) => !(selected.has('eng-3') && selected.has('trans-3')),
     severity: 'error',
   },

@@ -5,6 +5,7 @@ import {
   PastCase,
   EvaluationResult,
 } from '../types';
+import { evaluateConstraintsWithZ3, getAllComponentIds } from './z3Evaluation';
 
 // 木構造から選択された全ての部品IDを収集
 export function collectSelectedComponentIds(node: TreeNode): Set<string> {
@@ -135,7 +136,36 @@ export function generateWarnings(
   return warnings;
 }
 
-// 統合評価関数
+// 統合評価関数（Z3使用版）
+export async function evaluateConfigurationWithZ3(
+  rootNode: TreeNode,
+  components: Component[],
+  constraints: Constraint[],
+  pastCases: PastCase[]
+): Promise<EvaluationResult> {
+  const selectedComponentIds = collectSelectedComponentIds(rootNode);
+  const allComponentIds = getAllComponentIds(components);
+
+  const { total, breakdown } = calculateTotalPrice(selectedComponentIds, components);
+  const constraintViolations = await evaluateConstraintsWithZ3(
+    selectedComponentIds,
+    allComponentIds,
+    constraints
+  );
+  const { score: riskScore, relatedCases } = calculateRiskScore(selectedComponentIds, pastCases);
+  const warnings = generateWarnings(selectedComponentIds, components);
+
+  return {
+    totalPrice: total,
+    priceBreakdown: breakdown,
+    constraintViolations,
+    riskScore,
+    relatedCases,
+    warnings,
+  };
+}
+
+// 統合評価関数（従来版：Z3を使わない）
 export function evaluateConfiguration(
   rootNode: TreeNode,
   components: Component[],
