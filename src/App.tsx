@@ -10,7 +10,7 @@ import {
   pastCases,
 } from './data/sampleData';
 import { TreeNode, EvaluationResult } from './types';
-import { evaluateConfigurationWithZ3 } from './utils/evaluation';
+import { evaluateConfigurationWithZ3, generateConstraintExpressions } from './utils/evaluation';
 
 function App() {
   const [rootNode, setRootNode] = useState<TreeNode>(initialConfiguration.rootNode);
@@ -31,6 +31,11 @@ function App() {
     setRootNode(updateNode(rootNode));
     // 選択が変わったら評価結果をリセット
     setEvaluationResult(null);
+  };
+
+  // 制約式を生成
+  const handleGenerateExpressions = () => {
+    return generateConstraintExpressions(rootNode, components, constraints);
   };
 
   // 評価を実行（Z3使用）
@@ -86,7 +91,11 @@ function App() {
 
         {/* 右ペイン下部: 評価実行と結果 */}
         <div className="h-1/2 overflow-y-auto">
-          <EvaluationPanel onEvaluate={handleEvaluate} result={evaluationResult} />
+          <EvaluationPanel
+            onGenerateExpressions={handleGenerateExpressions}
+            onEvaluate={handleEvaluate}
+            result={evaluationResult}
+          />
         </div>
       </div>
     </div>
