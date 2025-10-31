@@ -1,13 +1,19 @@
-import { init } from 'z3-solver';
 import { Constraint, Component } from '../types';
 
 // Z3インスタンスをキャッシュ
-let z3Instance: Awaited<ReturnType<typeof init>> | null = null;
+let z3Instance: any = null;
 
-// Z3を初期化
+// Z3を初期化（動的インポート）
 export async function initZ3() {
   if (!z3Instance) {
-    z3Instance = await init();
+    try {
+      // 動的インポートでz3-solverを読み込む
+      const Z3Module = await import('z3-solver');
+      z3Instance = await Z3Module.init();
+    } catch (error) {
+      console.error('Z3初期化エラー:', error);
+      throw error;
+    }
   }
   return z3Instance;
 }

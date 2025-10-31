@@ -94,23 +94,35 @@ npm run preview
 
 **z3-solver のインストール**
 
-このプロジェクトはz3-solverパッケージを使用しています。初めてプロジェクトをクローンした場合、必ず`npm install`を実行してください：
+このプロジェクトはz3-solverパッケージを使用しています。`npm install`を実行すると、postinstallスクリプトが自動的に以下を実行します：
+
+1. `public`ディレクトリを作成
+2. Z3 WASMファイル（`z3-built.js`と`z3-built.wasm`）を`public`ディレクトリにコピー
 
 ```bash
 npm install
 ```
 
+これにより、ブラウザでZ3 Solverを使用するために必要なファイルが自動的に配置されます。
+
+**トラブルシューティング**
+
 もしz3-solverのインポートエラーが発生する場合：
 
-1. node_modulesディレクトリを削除して再インストール
+1. node_modulesとpublicディレクトリを削除して再インストール
    ```bash
-   rm -rf node_modules
+   rm -rf node_modules public
    npm install
    ```
 
 2. 開発サーバーを再起動
    ```bash
    npm run dev
+   ```
+
+3. ブラウザのコンソールで`initZ3`が定義されているか確認
+   ```javascript
+   console.log(typeof initZ3); // "function" と表示されるはず
    ```
 
 ## サンプルデータ

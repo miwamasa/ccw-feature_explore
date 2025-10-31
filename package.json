@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "postinstall": "mkdir -p public && cp node_modules/z3-solver/build/z3-built.js public/ && cp node_modules/z3-solver/build/z3-built.wasm public/"
   },
   "repository": {
     "type": "git",
