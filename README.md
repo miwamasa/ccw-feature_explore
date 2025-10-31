@@ -73,7 +73,11 @@
 ### インストール
 
 ```bash
-# 依存関係のインストール
+# リポジトリをクローン
+git clone <repository-url>
+cd ccw-feature_explore
+
+# 依存関係のインストール（重要：z3-solverを含む）
 npm install
 
 # 開発サーバーの起動
@@ -85,6 +89,29 @@ npm run build
 # プレビュー
 npm run preview
 ```
+
+### 重要な注意事項
+
+**z3-solver のインストール**
+
+このプロジェクトはz3-solverパッケージを使用しています。初めてプロジェクトをクローンした場合、必ず`npm install`を実行してください：
+
+```bash
+npm install
+```
+
+もしz3-solverのインポートエラーが発生する場合：
+
+1. node_modulesディレクトリを削除して再インストール
+   ```bash
+   rm -rf node_modules
+   npm install
+   ```
+
+2. 開発サーバーを再起動
+   ```bash
+   npm run dev
+   ```
 
 ## サンプルデータ
 
