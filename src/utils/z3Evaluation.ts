@@ -1,18 +1,196 @@
-import { init } from 'z3-solver';
-import { Constraint, Component } from '../types';
+import { Constraint, Component, Z3ConstraintDef, ArithmeticConstraint } from '../types';
 
-// Z3インスタンスをキャッシュ
-let z3Instance: Awaited<ReturnType<typeof init>> | null = null;
+/**
+ * Z3 Solver統合モジュール
+ *
+ * 参考: z3-solverパッケージを動的インポートで使用
+ * - 論理制約（AND, OR, NOT, IMPLIES, XOR）
+ * - 算術制約（total_price <= X, expected_failure_cost < Y）
+ */
 
-// Z3を初期化
-export async function initZ3() {
-  if (!z3Instance) {
-    z3Instance = await init();
+// Z3インスタンスのキャッシュ
+let z3Module: any = null;
+let z3InitAttempted = false;
+
+/**
+ * Z3 Solverを動的に初期化
+ */
+async function initZ3(): Promise<any | null> {
+  if (z3InitAttempted) return z3Module;
+
+  z3InitAttempted = true;
+
+  try {
+    // 動的インポート（参考コードのパターン）
+    const Z3 = await import('z3-solver');
+    console.log('Z3 Solver loaded successfully');
+    z3Module = Z3;
+    return Z3;
+  } catch (error) {
+    console.warn('Z3 Solver not available. Falling back to JavaScript evaluation.', error);
+    console.warn('To enable Z3: npm install z3-solver');
+    z3Module = null;
+    return null;
   }
-  return z3Instance;
 }
 
-// Z3を使って制約を評価
+/**
+ * Z3が利用可能かチェック
+ */
+export async function isZ3Available(): Promise<boolean> {
+  const z3 = await initZ3();
+  return z3 !== null;
+}
+
+/**
+ * 算術制約を解析してZ3式に変換（参考コードのパターン）
+ */
+function parseArithmeticExprToZ3(ctx: any, total_price: any, expected_failure_cost: any, expr: string): any | null {
+  // サポート: "total_price <= 300000" or "expected_failure_cost < 10000"
+  const match = expr.match(/\s*(total_price|expected_failure_cost)\s*(<=|<|>=|>|==|=)\s*([0-9]+(?:\.[0-9]+)?)\s*/);
+  if (!match) return null;
+
+  const lhs = match[1];
+  const op = match[2];
+  const rhs = match[3];
+
+  const rhsVal = rhs.includes('.') ? ctx.Real.val(rhs) : ctx.Int.val(Math.round(Number(rhs)));
+  const lhsExpr = lhs === 'total_price' ? total_price : expected_failure_cost;
+
+  // 比較式を構築
+  switch (op) {
+    case '<=': return lhsExpr.le(rhsVal);
+    case '<': return lhsExpr.lt(rhsVal);
+    case '>=': return lhsExpr.ge(rhsVal);
+    case '>': return lhsExpr.gt(rhsVal);
+    case '==': case '=': return lhsExpr.eq(rhsVal);
+    default: return null;
+  }
+}
+
+/**
+ * JavaScript フォールバック：算術制約を評価
+ */
+function evaluateArithmeticJS(metrics: { totalPrice: number; expectedFailureCost: number }, expr: string): boolean {
+  const match = expr.match(/\s*(total_price|expected_failure_cost)\s*(<=|<|>=|>|==|=)\s*([0-9]+(?:\.[0-9]+)?)\s*/);
+  if (!match) return false;
+
+  const lhs = match[1];
+  const op = match[2];
+  const rhs = parseFloat(match[3]);
+
+  const val = lhs === 'total_price' ? metrics.totalPrice : metrics.expectedFailureCost;
+
+  switch (op) {
+    case '<=': return val <= rhs;
+    case '<': return val < rhs;
+    case '>=': return val >= rhs;
+    case '>': return val > rhs;
+    case '==': case '=': return val === rhs;
+    default: return false;
+  }
+}
+
+/**
+ * Z3を使って算術制約を評価
+ */
+export async function evaluateArithmeticConstraintsWithZ3(
+  metrics: { totalPrice: number; expectedFailureCost: number },
+  constraints: ArithmeticConstraint[]
+): Promise<{ z3Used: boolean; results: { constraint: ArithmeticConstraint; satisfied: boolean; note?: string }[] }> {
+  const z3 = await initZ3();
+
+  if (!z3) {
+    // Z3が利用できない場合はJavaScriptでフォールバック
+    return {
+      z3Used: false,
+      results: constraints.map(c => ({
+        constraint: c,
+        satisfied: evaluateArithmeticJS(metrics, c.expression),
+        note: 'Evaluated with JavaScript (Z3 not available)'
+      }))
+    };
+  }
+
+  try {
+    // Z3を使って評価（参考コードのパターン）
+    const { Context } = z3;
+    const ctx = new Context('main');
+    const solver = new ctx.Solver();
+
+    // 変数を定義
+    const total_price = ctx.Int.const('total_price');
+    const expected_failure_cost = ctx.Real.const('expected_failure_cost');
+
+    // 具体的な値をアサート
+    solver.add(ctx.Int.val(Math.round(metrics.totalPrice)).eq(total_price));
+    solver.add(ctx.Real.val(metrics.expectedFailureCost).eq(expected_failure_cost));
+
+    const results = [];
+
+    for (const constraint of constraints) {
+      const parsed = parseArithmeticExprToZ3(ctx, total_price, expected_failure_cost, constraint.expression);
+
+      if (!parsed) {
+        results.push({
+          constraint,
+          satisfied: false,
+          note: 'Unsupported expression format'
+        });
+        continue;
+      }
+
+      // 制約を追加してチェック
+      solver.push();
+      solver.add(parsed);
+      const checkResult = await solver.check();
+      const satisfied = checkResult === 'sat';
+      results.push({
+        constraint,
+        satisfied,
+        note: `Evaluated with Z3: ${checkResult}`
+      });
+      solver.pop();
+    }
+
+    return { z3Used: true, results };
+  } catch (error) {
+    console.error('Z3 evaluation failed:', error);
+    // エラー時はJavaScriptでフォールバック
+    return {
+      z3Used: false,
+      results: constraints.map(c => ({
+        constraint: c,
+        satisfied: evaluateArithmeticJS(metrics, c.expression),
+        note: 'Z3 error, fell back to JavaScript'
+      }))
+    };
+  }
+}
+
+/**
+ * 論理制約を評価（JavaScript実装）
+ */
+function evaluateZ3Constraint(
+  z3Constraint: Z3ConstraintDef,
+  selectedComponentIds: Set<string>
+): boolean {
+  const { expr, components } = z3Constraint;
+  const values = components.map(id => selectedComponentIds.has(id));
+
+  switch (expr) {
+    case 'and': return values.every(v => v);
+    case 'or': return values.some(v => v);
+    case 'not': return !values.every(v => v);
+    case 'implies': return components.length >= 2 ? (!values[0] || values[1]) : true;
+    case 'xor': return components.length >= 2 ? (values[0] !== values[1]) : false;
+    default: return true;
+  }
+}
+
+/**
+ * Z3風の制約を使って制約を評価（JavaScript実装）
+ */
 export async function evaluateConstraintsWithZ3(
   selectedComponentIds: Set<string>,
   _allComponentIds: string[],
@@ -20,126 +198,29 @@ export async function evaluateConstraintsWithZ3(
 ): Promise<{ constraint: Constraint; message: string }[]> {
   const violations: { constraint: Constraint; message: string }[] = [];
 
-  try {
-    const { Context } = await initZ3();
-    const ctx = Context('main');
-
-    // 各制約を個別に評価
-    for (const constraint of constraints) {
-      // 制約に関連する部品が選択されているかチェック
-      const relevantComponentsSelected = constraint.componentIds.some(id =>
-        selectedComponentIds.has(id)
-      );
-
-      if (!relevantComponentsSelected) {
-        continue;
-      }
-
-      // Z3制約がある場合はZ3で評価
-      if (constraint.z3Constraint) {
-        // 新しいソルバーを作成
-        const solver = new ctx.Solver();
-
-        // 各部品の選択状態を変数として定義
-        const componentVars = new Map<string, any>();
-        constraint.z3Constraint.components.forEach(id => {
-          const boolVar = ctx.Bool.const(id);
-          componentVars.set(id, boolVar);
-
-          // 選択状態に応じてアサート
-          if (selectedComponentIds.has(id)) {
-            solver.add(boolVar);
-          } else {
-            solver.add(boolVar.not());
-          }
-        });
-
-        // 制約式を構築して追加
-        const z3Expr = buildZ3Expression(
-          ctx,
-          componentVars,
-          constraint.z3Constraint.expr,
-          constraint.z3Constraint.components
-        );
-
-        solver.add(z3Expr);
-
-        // 充足可能性をチェック
-        const result = await solver.check();
-
-        // unsatの場合は制約違反
-        if (result === 'unsat') {
-          violations.push({
-            constraint,
-            message: constraint.description,
-          });
-        }
-      } else {
-        // 従来のvalidate関数を使用
-        const isValid = constraint.validate(selectedComponentIds);
-        if (!isValid) {
-          violations.push({
-            constraint,
-            message: constraint.description,
-          });
-        }
-      }
-    }
-  } catch (error) {
-    console.error('Z3 evaluation error:', error);
-    // Z3エラー時は従来の方法にフォールバック
-    return evaluateConstraintsFallback(selectedComponentIds, constraints);
-  }
-
-  return violations;
-}
-
-// Z3式を構築
-function buildZ3Expression(ctx: any, componentVars: Map<string, any>, expr: string, components: string[]): any {
-  const vars = components.map(id => componentVars.get(id)!);
-
-  switch (expr) {
-    case 'and':
-      return ctx.And(...vars);
-    case 'or':
-      return ctx.Or(...vars);
-    case 'not':
-      // notは単一の変数に対して適用
-      if (components.length === 1) {
-        return ctx.Not(vars[0]);
-      }
-      // 複数の場合はNAND (not all)
-      return ctx.Not(ctx.And(...vars));
-    case 'implies':
-      // A implies B: A -> B = not A or B
-      if (components.length >= 2) {
-        return ctx.Implies(vars[0], vars[1]);
-      }
-      return vars[0];
-    case 'xor':
-      if (components.length === 2) {
-        return ctx.Xor(vars[0], vars[1]);
-      }
-      // 複数の場合は最初の2つのXOR
-      return ctx.Xor(vars[0], vars[1]);
-    default:
-      return ctx.And(...vars);
-  }
-}
-
-// フォールバック：従来のvalidate関数を使用
-function evaluateConstraintsFallback(
-  selectedComponentIds: Set<string>,
-  constraints: Constraint[]
-): { constraint: Constraint; message: string }[] {
-  const violations: { constraint: Constraint; message: string }[] = [];
-
-  constraints.forEach(constraint => {
+  // 各制約を評価
+  for (const constraint of constraints) {
+    // 制約に関連する部品が選択されているかチェック
     const relevantComponentsSelected = constraint.componentIds.some(id =>
       selectedComponentIds.has(id)
     );
 
-    if (relevantComponentsSelected) {
+    if (!relevantComponentsSelected) {
+      continue;
+    }
+
+    // Z3制約がある場合はZ3風の評価を使用
+    if (constraint.z3Constraint) {
+      const isValid = evaluateZ3Constraint(constraint.z3Constraint, selectedComponentIds);
+
+      if (!isValid) {
+        violations.push({
+          constraint,
+          message: constraint.description,
+        });
+      }
+    } else {
+      // 従来のvalidate関数を使用
       const isValid = constraint.validate(selectedComponentIds);
       if (!isValid) {
         violations.push({
@@ -148,7 +229,7 @@ function evaluateConstraintsFallback(
         });
       }
     }
-  });
+  }
 
   return violations;
 }

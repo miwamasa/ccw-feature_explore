@@ -53,15 +53,15 @@ function App() {
             <h1 className="text-2xl font-bold text-gray-800">
               製品構成デザインツール
             </h1>
-            <span className="bg-blue-600 text-white text-xs font-semibold px-2 py-1 rounded">
-              Z3 Solver
+            <span className="bg-green-600 text-white text-xs font-semibold px-2 py-1 rounded">
+              Z3-Style Constraints
             </span>
           </div>
           <p className="text-sm text-gray-600">
             各選択ポイントで部品を選択し、評価ボタンで制約・価格・リスクを確認できます
           </p>
           <p className="text-xs text-gray-500 mt-1">
-            ※ 制約評価にZ3 Solver (WASM) を使用しています
+            ※ Z3論理式（AND, OR, NOT, IMPLIES, XOR）による制約評価
           </p>
         </div>
         <div className="bg-gray-50 p-4 rounded-lg">
