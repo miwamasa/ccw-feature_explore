@@ -3,18 +3,52 @@ import { TreeView } from './components/TreeView';
 import { ConstraintsPanel } from './components/ConstraintsPanel';
 import { EvaluationPanel } from './components/EvaluationPanel';
 import {
-  initialConfiguration,
-  components,
-  selectionPoints,
-  constraints,
-  pastCases,
+  initialConfiguration as carInitialConfiguration,
+  components as carComponents,
+  selectionPoints as carSelectionPoints,
+  constraints as carConstraints,
+  pastCases as carPastCases,
 } from './data/sampleData';
+import {
+  elevatorInitialConfiguration,
+  elevatorComponents,
+  elevatorSelectionPoints,
+  elevatorConstraints,
+  elevatorPastCases,
+} from './data/elevatorData';
 import { TreeNode, EvaluationResult } from './types';
 import { evaluateConfigurationWithZ3, generateConstraintExpressions } from './utils/evaluation';
 
+type DataSource = 'car' | 'elevator';
+
 function App() {
-  const [rootNode, setRootNode] = useState<TreeNode>(initialConfiguration.rootNode);
+  const [dataSource, setDataSource] = useState<DataSource>('car');
+  const [rootNode, setRootNode] = useState<TreeNode>(carInitialConfiguration.rootNode);
   const [evaluationResult, setEvaluationResult] = useState<EvaluationResult | null>(null);
+
+  // データソースによってデータを切り替え
+  const currentData = dataSource === 'car' ? {
+    components: carComponents,
+    selectionPoints: carSelectionPoints,
+    constraints: carConstraints,
+    pastCases: carPastCases,
+    title: '自動車部品構成',
+    badge: 'Automotive Parts',
+  } : {
+    components: elevatorComponents,
+    selectionPoints: elevatorSelectionPoints,
+    constraints: elevatorConstraints,
+    pastCases: elevatorPastCases,
+    title: 'エレベータシステム構成',
+    badge: 'Elevator System',
+  };
+
+  // データソース切り替え時の処理
+  const handleDataSourceChange = (newSource: DataSource) => {
+    setDataSource(newSource);
+    setRootNode(newSource === 'car' ? carInitialConfiguration.rootNode : elevatorInitialConfiguration.rootNode);
+    setEvaluationResult(null);
+  };
 
   // 部品を選択したときの処理
   const handleSelectComponent = (nodeId: string, componentId: string) => {
@@ -35,13 +69,18 @@ function App() {
 
   // 制約式を生成
   const handleGenerateExpressions = () => {
-    return generateConstraintExpressions(rootNode, components, constraints);
+    return generateConstraintExpressions(rootNode, currentData.components, currentData.constraints);
   };
 
   // 評価を実行（Z3使用）
   const handleEvaluate = async () => {
     try {
-      const result = await evaluateConfigurationWithZ3(rootNode, components, constraints, pastCases);
+      const result = await evaluateConfigurationWithZ3(
+        rootNode,
+        currentData.components,
+        currentData.constraints,
+        currentData.pastCases
+      );
       setEvaluationResult(result);
     } catch (error) {
       console.error('評価エラー:', error);
@@ -62,6 +101,31 @@ function App() {
               Z3-Style Constraints
             </span>
           </div>
+
+          {/* データソース選択ボタン */}
+          <div className="flex gap-2 mb-3">
+            <button
+              onClick={() => handleDataSourceChange('car')}
+              className={`flex-1 px-4 py-2 rounded-lg font-semibold transition-colors ${
+                dataSource === 'car'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              🚗 自動車
+            </button>
+            <button
+              onClick={() => handleDataSourceChange('elevator')}
+              className={`flex-1 px-4 py-2 rounded-lg font-semibold transition-colors ${
+                dataSource === 'elevator'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              🏢 エレベータ
+            </button>
+          </div>
+
           <p className="text-sm text-gray-600">
             各選択ポイントで部品を選択し、評価ボタンで制約・価格・リスクを確認できます
           </p>
@@ -70,13 +134,18 @@ function App() {
           </p>
         </div>
         <div className="bg-gray-50 p-4 rounded-lg">
-          <h2 className="text-xl font-bold text-gray-800 mb-4 border-b-2 border-gray-300 pb-2">
-            部品構成ツリー
-          </h2>
+          <div className="flex items-center gap-2 mb-4 border-b-2 border-gray-300 pb-2">
+            <h2 className="text-xl font-bold text-gray-800">
+              {currentData.title}
+            </h2>
+            <span className="bg-purple-600 text-white text-xs font-semibold px-2 py-1 rounded">
+              {currentData.badge}
+            </span>
+          </div>
           <TreeView
             node={rootNode}
-            selectionPoints={selectionPoints}
-            components={components}
+            selectionPoints={currentData.selectionPoints}
+            components={currentData.components}
             onSelectComponent={handleSelectComponent}
           />
         </div>
@@ -86,7 +155,7 @@ function App() {
       <div className="w-1/2 flex flex-col">
         {/* 右ペイン上部: 制約と過去事例 */}
         <div className="h-1/2 overflow-hidden">
-          <ConstraintsPanel constraints={constraints} pastCases={pastCases} />
+          <ConstraintsPanel constraints={currentData.constraints} pastCases={currentData.pastCases} />
         </div>
 
         {/* 右ペイン下部: 評価実行と結果 */}
