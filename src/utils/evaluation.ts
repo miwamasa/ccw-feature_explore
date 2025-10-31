@@ -7,6 +7,120 @@ import {
 } from '../types';
 import { evaluateConstraintsWithZ3, getAllComponentIds } from './z3Evaluation';
 
+// 制約式を生成
+export function generateConstraintExpressions(
+  rootNode: TreeNode,
+  components: Component[],
+  constraints: Constraint[]
+): {
+  selectedComponents: { id: string; name: string }[];
+  logicalConstraints: string[];
+  arithmeticConstraints: string[];
+  z3Code: string;
+} {
+  const selectedComponentIds = collectSelectedComponentIds(rootNode);
+
+  // 選択された部品リスト
+  const selectedComponents = Array.from(selectedComponentIds).map(id => {
+    const component = components.find(c => c.id === id);
+    return {
+      id,
+      name: component?.name || id
+    };
+  });
+
+  // 論理制約を式として表現
+  const logicalConstraints: string[] = [];
+  constraints.forEach(constraint => {
+    if (constraint.z3Constraint) {
+      const { expr, components: compIds } = constraint.z3Constraint;
+      const compNames = compIds.map(id => {
+        const comp = components.find(c => c.id === id);
+        return comp?.name || id;
+      });
+
+      let exprStr = '';
+      switch (expr) {
+        case 'not':
+          exprStr = `NOT (${compNames.join(' AND ')})`;
+          break;
+        case 'and':
+          exprStr = `${compNames.join(' AND ')}`;
+          break;
+        case 'or':
+          exprStr = `${compNames.join(' OR ')}`;
+          break;
+        case 'implies':
+          exprStr = `${compNames[0]} IMPLIES ${compNames[1]}`;
+          break;
+        case 'xor':
+          exprStr = `${compNames[0]} XOR ${compNames[1]}`;
+          break;
+      }
+
+      logicalConstraints.push(`${constraint.name}: ${exprStr}`);
+    }
+  });
+
+  // 算術制約を生成（価格とリスク）
+  const { total: totalPrice } = calculateTotalPrice(selectedComponentIds, components);
+  const { score: riskScore } = calculateRiskScore(selectedComponentIds, []);
+
+  const arithmeticConstraints: string[] = [
+    `total_price = ${Math.round(totalPrice)}`,
+    `expected_failure_cost = ${riskScore * 1000}  // リスクスコア × 1000`,
+  ];
+
+  // Z3擬似コードを生成
+  const z3Code = generateZ3PseudoCode(selectedComponents, logicalConstraints, arithmeticConstraints);
+
+  return {
+    selectedComponents,
+    logicalConstraints,
+    arithmeticConstraints,
+    z3Code
+  };
+}
+
+// Z3擬似コードを生成
+function generateZ3PseudoCode(
+  selectedComponents: { id: string; name: string }[],
+  logicalConstraints: string[],
+  arithmeticConstraints: string[]
+): string {
+  let code = '// Z3 Solver 制約式\n\n';
+
+  // 変数定義
+  code += '// 部品変数（Bool）\n';
+  selectedComponents.forEach(comp => {
+    code += `const ${comp.id} = Bool('${comp.id}');  // ${comp.name}\n`;
+  });
+
+  code += '\n// 算術変数（Int/Real）\n';
+  code += 'const total_price = Int(\'total_price\');\n';
+  code += 'const expected_failure_cost = Real(\'expected_failure_cost\');\n';
+
+  // 制約
+  code += '\n// 論理制約\n';
+  if (logicalConstraints.length > 0) {
+    logicalConstraints.forEach(constraint => {
+      code += `// ${constraint}\n`;
+    });
+  } else {
+    code += '// なし\n';
+  }
+
+  code += '\n// 算術制約\n';
+  arithmeticConstraints.forEach(constraint => {
+    code += `solver.add(${constraint});\n`;
+  });
+
+  code += '\n// ソルバー実行\n';
+  code += 'const result = await solver.check();  // "sat" or "unsat"\n';
+
+  return code;
+}
+
 // 木構造から選択された全ての部品IDを収集
 export function collectSelectedComponentIds(node: TreeNode): Set<string> {
   const selected = new Set<string>();
