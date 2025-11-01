@@ -118,6 +118,19 @@ function generateZ3PseudoCode(
   code += 'const total_price = Int(\'total_price\');\n';
   code += 'const expected_failure_cost = Real(\'expected_failure_cost\');\n';
 
+  // 選択された部品の状態を設定
+  code += '\n// 選択された部品の状態\n';
+  const selectedIds = new Set(selectedComponents.map(c => c.id));
+  allComponentIds.forEach(id => {
+    const component = components.find(c => c.id === id);
+    const name = component?.name || id;
+    if (selectedIds.has(id)) {
+      code += `solver.add(${id});  // ${name}: 選択済み\n`;
+    } else {
+      code += `solver.add(Not(${id}));  // ${name}: 未選択\n`;
+    }
+  });
+
   // 論理制約
   code += '\n// 論理制約\n';
   const z3LogicalConstraints = constraints.filter(c => c.z3Constraint);
