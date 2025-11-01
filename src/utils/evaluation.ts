@@ -72,7 +72,7 @@ export function generateConstraintExpressions(
   ];
 
   // Z3擬似コードを生成
-  const z3Code = generateZ3PseudoCode(selectedComponents, logicalConstraints, arithmeticConstraints);
+  const z3Code = generateZ3PseudoCode(selectedComponents, arithmeticConstraints, constraints);
 
   return {
     selectedComponents,
@@ -85,8 +85,8 @@ export function generateConstraintExpressions(
 // Z3擬似コードを生成
 function generateZ3PseudoCode(
   selectedComponents: { id: string; name: string }[],
-  logicalConstraints: string[],
-  arithmeticConstraints: string[]
+  arithmeticConstraints: string[],
+  constraints: Constraint[]
 ): string {
   let code = '// Z3 Solver 制約式\n\n';
 
@@ -100,11 +100,37 @@ function generateZ3PseudoCode(
   code += 'const total_price = Int(\'total_price\');\n';
   code += 'const expected_failure_cost = Real(\'expected_failure_cost\');\n';
 
-  // 制約
+  // 論理制約
   code += '\n// 論理制約\n';
-  if (logicalConstraints.length > 0) {
-    logicalConstraints.forEach(constraint => {
-      code += `// ${constraint}\n`;
+  const z3LogicalConstraints = constraints.filter(c => c.z3Constraint);
+  if (z3LogicalConstraints.length > 0) {
+    z3LogicalConstraints.forEach(constraint => {
+      const { expr, components: compIds } = constraint.z3Constraint!;
+      let z3Expr = '';
+
+      switch (expr) {
+        case 'not':
+          if (compIds.length === 2) {
+            z3Expr = `Not(And(${compIds.join(', ')}))`;
+          } else {
+            z3Expr = `Not(${compIds[0]})`;
+          }
+          break;
+        case 'and':
+          z3Expr = `And(${compIds.join(', ')})`;
+          break;
+        case 'or':
+          z3Expr = `Or(${compIds.join(', ')})`;
+          break;
+        case 'implies':
+          z3Expr = `Implies(${compIds[0]}, ${compIds[1]})`;
+          break;
+        case 'xor':
+          z3Expr = `Xor(${compIds[0]}, ${compIds[1]})`;
+          break;
+      }
+
+      code += `solver.add(${z3Expr});  // ${constraint.name}\n`;
     });
   } else {
     code += '// なし\n';
