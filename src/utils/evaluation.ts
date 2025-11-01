@@ -67,12 +67,12 @@ export function generateConstraintExpressions(
   const { score: riskScore } = calculateRiskScore(selectedComponentIds, []);
 
   const arithmeticConstraints: string[] = [
-    `total_price = ${Math.round(totalPrice)}`,
-    `expected_failure_cost = ${riskScore * 1000}  // リスクスコア × 1000`,
+    `total_price == ${Math.round(totalPrice)}`,
+    `expected_failure_cost == ${riskScore * 1000}`,
   ];
 
   // Z3擬似コードを生成
-  const z3Code = generateZ3PseudoCode(selectedComponents, arithmeticConstraints, constraints);
+  const z3Code = generateZ3PseudoCode(selectedComponents, arithmeticConstraints, constraints, components);
 
   return {
     selectedComponents,
@@ -86,15 +86,33 @@ export function generateConstraintExpressions(
 function generateZ3PseudoCode(
   selectedComponents: { id: string; name: string }[],
   arithmeticConstraints: string[],
-  constraints: Constraint[]
+  constraints: Constraint[],
+  components: Component[]
 ): string {
   let code = '// Z3 Solver 制約式\n\n';
 
-  // 変数定義
-  code += '// 部品変数（Bool）\n';
-  selectedComponents.forEach(comp => {
-    code += `const ${comp.id} = Bool('${comp.id}');  // ${comp.name}\n`;
+  // 制約で使われている全ての部品IDを収集
+  const allComponentIds = new Set<string>();
+  constraints.forEach(constraint => {
+    if (constraint.z3Constraint) {
+      constraint.z3Constraint.components.forEach(id => allComponentIds.add(id));
+    }
   });
+
+  // 選択された部品も追加
+  selectedComponents.forEach(comp => allComponentIds.add(comp.id));
+
+  // 部品変数定義
+  code += '// 部品変数（Bool）\n';
+  if (allComponentIds.size > 0) {
+    allComponentIds.forEach(id => {
+      const component = components.find(c => c.id === id);
+      const name = component?.name || id;
+      code += `const ${id} = Bool('${id}');  // ${name}\n`;
+    });
+  } else {
+    code += '// なし\n';
+  }
 
   code += '\n// 算術変数（Int/Real）\n';
   code += 'const total_price = Int(\'total_price\');\n';
@@ -137,8 +155,14 @@ function generateZ3PseudoCode(
   }
 
   code += '\n// 算術制約\n';
-  arithmeticConstraints.forEach(constraint => {
-    code += `solver.add(${constraint});\n`;
+  arithmeticConstraints.forEach((constraint, index) => {
+    if (index === 0) {
+      code += `solver.add(${constraint});  // 総価格\n`;
+    } else if (index === 1) {
+      code += `solver.add(${constraint});  // 期待故障コスト（リスクスコア × 1000）\n`;
+    } else {
+      code += `solver.add(${constraint});\n`;
+    }
   });
 
   code += '\n// ソルバー実行\n';
