@@ -295,21 +295,6 @@ export function generateWarnings(
     }
   });
 
-  // 選択されていない重要な部品がある場合
-  const hasEngine = Array.from(selectedComponentIds).some(id =>
-    components.find(c => c.id === id && c.category === 'engine')
-  );
-  const hasTransmission = Array.from(selectedComponentIds).some(id =>
-    components.find(c => c.id === id && c.category === 'transmission')
-  );
-
-  if (!hasEngine) {
-    warnings.push('エンジンが選択されていません');
-  }
-  if (!hasTransmission) {
-    warnings.push('トランスミッションが選択されていません');
-  }
-
   return warnings;
 }
 
